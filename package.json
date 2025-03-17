@@ -1,0 +1,13 @@
+{
+    "name": "pixel-canvas",
+    "version": "1.0.0",
+    "description": "Lienzo de píxeles colaborativo",
+    "main": "server.js",
+    "scripts": {
+        "start": "node server.js"
+    },
+    "dependencies": {
+        "express": "^4.17.1",
+        "socket.io": "^4.3.2"
+    }
+} 
