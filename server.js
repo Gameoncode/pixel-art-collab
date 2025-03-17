@@ -8,8 +8,8 @@ const io = require('socket.io')(http, {
     }
 });
 
-// Servir archivos estáticos
-app.use(express.static('./'));
+// Servir archivos estáticos desde la carpeta public
+app.use(express.static('./public'));
 
 // Matriz de píxeles del servidor
 const GRID_WIDTH = 100;

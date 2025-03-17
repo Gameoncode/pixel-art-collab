@@ -25,7 +25,9 @@ let pixels = new Array(GRID_WIDTH).fill(null)
     .map(() => new Array(GRID_HEIGHT).fill('#FFFFFF'));
 
 // Conexión WebSocket
-const socket = io(window.location.origin);
+const socket = io(window.location.hostname === 'localhost' 
+    ? 'http://localhost:3000'
+    : 'https://pixel-art-collab.onrender.com');
 
 socket.on('pixelUpdate', (data) => {
     pixels[data.x][data.y] = data.color;
