@@ -14,6 +14,9 @@ let offsetY = 0;
 let isDragging = false;
 let lastX = 0;
 let lastY = 0;
+let lastTouchDistance = 0;
+let isZooming = false;
+let lastTap = 0;
 
 // Inicialización del canvas
 canvas.width = CANVAS_WIDTH;
@@ -28,6 +31,14 @@ let pixels = new Array(GRID_WIDTH).fill(null)
 const socket = io(window.location.hostname === 'localhost' 
     ? 'http://localhost:3000'
     : 'https://pixel-art-collab.onrender.com');
+
+socket.on('connect', () => {
+    console.log('Conectado al servidor');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Error de conexión:', error);
+});
 
 socket.on('pixelUpdate', (data) => {
     pixels[data.x][data.y] = data.color;
@@ -56,6 +67,19 @@ function drawPixel(x, y, color) {
     ctx.strokeRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
 }
 
+// Función para obtener coordenadas del pixel
+function getPixelCoordinates(event) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = event.clientX || event.touches[0].clientX;
+    const clientY = event.clientY || event.touches[0].clientY;
+    
+    // Ajustar las coordenadas según la transformación del canvas
+    const x = Math.floor(((clientX - rect.left) / scale - offsetX) / PIXEL_SIZE);
+    const y = Math.floor(((clientY - rect.top) / scale - offsetY) / PIXEL_SIZE);
+    
+    return { x, y };
+}
+
 // Eventos del mouse
 canvas.addEventListener('mousedown', (e) => {
     isDragging = true;
@@ -64,11 +88,8 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mousemove', (e) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left - offsetX) / (PIXEL_SIZE * scale));
-    const y = Math.floor((e.clientY - rect.top - offsetY) / (PIXEL_SIZE * scale));
-    
-    document.getElementById('mouseCoords').textContent = `Coordenadas: ${x}, ${y}`;
+    const coords = getPixelCoordinates(e);
+    document.getElementById('mouseCoords').textContent = `Coordenadas: ${coords.x}, ${coords.y}`;
 
     if (isDragging) {
         const deltaX = e.clientX - lastX;
@@ -87,25 +108,92 @@ canvas.addEventListener('mouseup', () => {
 
 canvas.addEventListener('click', (e) => {
     if (isDragging) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left - offsetX) / (PIXEL_SIZE * scale));
-    const y = Math.floor((e.clientY - rect.top - offsetY) / (PIXEL_SIZE * scale));
-
-    if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
-        const color = document.getElementById('colorPicker').value;
-        socket.emit('placePixel', { x, y, color });
+    
+    const coords = getPixelCoordinates(e);
+    if (placePixel(coords.x, coords.y)) {
+        console.log('Pixel colocado en:', coords.x, coords.y);
     }
 });
+
+// Eventos táctiles
+canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        isZooming = true;
+        lastTouchDistance = getTouchDistance(e.touches);
+    } else {
+        const now = Date.now();
+        if (now - lastTap < 300) { // Doble tap
+            e.preventDefault();
+            const coords = getPixelCoordinates(e);
+            placePixel(coords.x, coords.y);
+        }
+        lastTap = now;
+        
+        isDragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+    }
+});
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    
+    if (isZooming && e.touches.length === 2) {
+        const distance = getTouchDistance(e.touches);
+        const deltaScale = distance / lastTouchDistance;
+        scale *= deltaScale;
+        scale = Math.min(Math.max(0.5, scale), 5); // Limitar zoom
+        lastTouchDistance = distance;
+        updateCanvasTransform();
+    } else if (isDragging && e.touches.length === 1) {
+        const deltaX = e.touches[0].clientX - lastX;
+        const deltaY = e.touches[0].clientY - lastY;
+        offsetX += deltaX;
+        offsetY += deltaY;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        updateCanvasTransform();
+    }
+    
+    const coords = getPixelCoordinates(e);
+    document.getElementById('mouseCoords').textContent = `Coordenadas: ${coords.x}, ${coords.y}`;
+});
+
+canvas.addEventListener('touchend', () => {
+    isDragging = false;
+    isZooming = false;
+});
+
+// Función auxiliar para calcular la distancia entre dos toques
+function getTouchDistance(touches) {
+    return Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY
+    );
+}
+
+// Función para colocar un pixel
+function placePixel(x, y) {
+    if (x >= 0 && x < GRID_WIDTH && y >= 0 && y < GRID_HEIGHT) {
+        const color = document.getElementById('colorPicker').value;
+        pixels[x][y] = color; // Actualizar matriz local inmediatamente
+        drawPixel(x, y, color); // Dibujar inmediatamente
+        socket.emit('placePixel', { x, y, color });
+        return true;
+    }
+    return false;
+}
 
 // Controles de zoom
 document.getElementById('zoomIn').addEventListener('click', () => {
     scale *= 1.2;
+    scale = Math.min(scale, 5); // Limitar zoom máximo
     updateCanvasTransform();
 });
 
 document.getElementById('zoomOut').addEventListener('click', () => {
     scale *= 0.8;
+    scale = Math.max(scale, 0.5); // Limitar zoom mínimo
     updateCanvasTransform();
 });
 
@@ -117,8 +205,34 @@ document.getElementById('resetZoom').addEventListener('click', () => {
 });
 
 function updateCanvasTransform() {
+    const container = canvas.parentElement;
+    const containerRect = container.getBoundingClientRect();
+    
+    // Centrar el canvas inicialmente
+    if (offsetX === 0 && offsetY === 0) {
+        offsetX = (containerRect.width - CANVAS_WIDTH * scale) / 2;
+        offsetY = (containerRect.height - CANVAS_HEIGHT * scale) / 2;
+    }
+    
     canvas.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+    canvas.style.transformOrigin = '0 0';
 }
 
+// Prevenir el zoom del navegador en dispositivos móviles
+document.addEventListener('gesturestart', (e) => {
+    e.preventDefault();
+});
+
 // Inicialización
-drawCanvas(); 
+drawCanvas();
+
+// Agregar evento para actualización inicial
+window.addEventListener('load', () => {
+    updateCanvasTransform();
+    drawCanvas();
+});
+
+// Agregar evento para redimensionamiento de ventana
+window.addEventListener('resize', () => {
+    updateCanvasTransform();
+}); 

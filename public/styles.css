@@ -2,12 +2,14 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
     font-family: Arial, sans-serif;
     background-color: #f0f0f0;
     overflow: hidden;
+    touch-action: none; /* Mejora el manejo táctil */
 }
 
 .container {
@@ -21,6 +23,8 @@ body {
     color: white;
     padding: 1rem;
     display: flex;
+    flex-wrap: wrap; /* Para dispositivos móviles */
+    gap: 1rem;
     justify-content: space-between;
     align-items: center;
 }
@@ -29,6 +33,8 @@ body {
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex: 1;
+    min-width: 200px;
 }
 
 .color-picker input[type="color"] {
@@ -37,25 +43,47 @@ body {
     border: none;
     border-radius: 5px;
     cursor: pointer;
+    padding: 0;
+}
+
+.coordinates {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 0.5rem;
+    border-radius: 5px;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    z-index: 1000;
 }
 
 .controls {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .controls button {
-    padding: 0.5rem 1rem;
+    padding: 0.8rem 1.2rem;
     background-color: #555;
     color: white;
     border: none;
     border-radius: 5px;
     cursor: pointer;
     font-size: 1.2rem;
+    min-width: 44px; /* Área táctil mínima recomendada */
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .controls button:hover {
     background-color: #666;
+}
+
+.controls button:active {
+    background-color: #444;
+    transform: scale(0.95);
 }
 
 .canvas-container {
@@ -64,6 +92,7 @@ body {
     position: relative;
     background-color: #fff;
     cursor: crosshair;
+    touch-action: none; /* Mejora el manejo táctil */
 }
 
 #pixelCanvas {
@@ -72,4 +101,25 @@ body {
     left: 50%;
     transform: translate(-50%, -50%);
     image-rendering: pixelated;
+}
+
+/* Estilos para dispositivos móviles */
+@media (max-width: 768px) {
+    .tools {
+        padding: 0.5rem;
+    }
+
+    .color-picker {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .controls {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .coordinates {
+        font-size: 0.8rem;
+    }
 } 
